@@ -1,0 +1,134 @@
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: FortiEDR Lab (VPC + EC2 + Auto-destroy after 2 hours)
+
+Resources:
+  FortiEDRVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+
+  FortiEDRSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FortiEDRVPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: us-west-1a
+
+  FortiEDRIGW:
+    Type: AWS::EC2::InternetGateway
+
+  FortiEDRVPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref FortiEDRVPC
+      InternetGatewayId: !Ref FortiEDRIGW
+
+  FortiEDRRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref FortiEDRVPC
+
+  FortiEDRRoute:
+    Type: AWS::EC2::Route
+    DependsOn: FortiEDRVPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref FortiEDRRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref FortiEDRIGW
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref FortiEDRSubnet
+      RouteTableId: !Ref FortiEDRRouteTable
+
+  FortiEDRSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow RDP
+      VpcId: !Ref FortiEDRVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3389
+          ToPort: 3389
+          CidrIp: 0.0.0.0/0
+
+  FortiEDREC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.large
+      ImageId: ami-0bd727d0f2cc37f98
+      SubnetId: !Ref FortiEDRSubnet
+      SecurityGroupIds:
+        - !Ref FortiEDRSG
+      Tags:
+        - Key: Name
+          Value: FortiEDR-Lab
+        - Key: AutoDelete
+          Value: 'true'
+
+  DestroyLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DestroyStackPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:DeleteStack
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+  DestroyLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt DestroyLambdaRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+
+          def handler(event, context):
+              client = boto3.client('cloudformation')
+              stack_name = os.environ['STACK_NAME']
+              print(f"Deleting stack: {stack_name}")
+              client.delete_stack(StackName=stack_name)
+
+      Environment:
+        Variables:
+          STACK_NAME: !Ref AWS::StackName
+
+  DestroyRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: "cron(4 1 30 6 ? 2025)"
+      Targets:
+        - Arn: !GetAtt DestroyLambdaFunction.Arn
+          Id: TargetFunctionV1
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DestroyLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt DestroyRule.Arn
