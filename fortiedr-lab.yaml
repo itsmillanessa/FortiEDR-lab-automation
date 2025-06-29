@@ -1,6 +1,6 @@
 
 AWSTemplateFormatVersion: '2010-09-09'
-Description: FortiEDR Lab (VPC + EC2 + Auto-destroy after 2 hours)
+Description: FortiEDR Lab (VPC + EC2 + Auto-destroy after 4 hours)
 
 Resources:
   FortiEDRVPC:
