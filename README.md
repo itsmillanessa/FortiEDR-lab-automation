@@ -1,25 +1,22 @@
-# FortiEDR Lab Automation
+🕒 Auto-Destructible Lab
+fortiedr-lab-autodestroy-4h.yaml
+Este template de CloudFormation lanza un entorno completo para pruebas de FortiEDR sobre Windows con:
 
-Este repo contiene dos templates CloudFormation:
-- `fortiedr-lab.yaml`: Despliega VPC + EC2 Windows con AMI personalizada.
-- `fortiedr-auto-destroy.yaml`: Lambda + EventBridge para eliminar el stack a las 2 horas.
+VPC y subred pública
 
-## 👥 requerimientos para ejecutar:
+EC2 con tu AMI personalizada (ami-0bd727d0f2cc37f98)
 
-Para que puedas lanzar este lab:
+Security Group con acceso RDP (puerto 3389)
 
-1. Asegúrate de que tu cuenta AWS tenga permisos necesarios.
-2. Solicita que tu cuenta esté autorizada para usar la AMI `ami-0cdd0c1de5ebe61d1` (contacta a @amillan).
-3. Sigue los pasos arriba descritos para desplegar ambos stacks.
+Lambda + EventBridge que autodestruyen el stack 4 horas después del despliegue
 
+🚀 Uso
+Ve a AWS CloudFormation
 
+Clic en “Crear pila” > “Con recursos nuevos (estándar)”
 
+Carga el archivo fortiedr-lab-autodestroy-4h.yaml
 
-## 🚀 Pasos
+Da clic en “Siguiente” → “Siguiente” → Acepta permisos IAM → Crear pila
 
-1. Desplegar:
-```bash
-aws cloudformation deploy \
-    --template-file fortiedr-lab.yaml \
-    --stack-name fortiedr-lab \
-    --region us-west-1
+🕓 La pila se eliminará automáticamente en 4 horas sin intervención manual.
